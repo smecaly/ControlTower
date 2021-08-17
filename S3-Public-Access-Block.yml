@@ -1,0 +1,65 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  S3PublicAccessBlock:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: S3-Public-Access-Block-ConfigRulev1
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt LambdaFunctionRole.Arn
+      Code:
+        S3Bucket: aws-license-manager-service-25ef1859-dd1c-4c4b-as
+        S3Key: S3-Public-Access-Block-ConfigRule.zip
+      Runtime: python3.8
+      Timeout: 900
+  LambdaFunctionRole:
+    Type: AWS::IAM::Role 
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+              - lambda.amazonaws.com
+          Action:
+            - sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AdministratorAccess"
+      Policies:
+      - PolicyName: STSlambda
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: 
+              - sts:*
+            Resource: '*'
+
+  EventRule: 
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: "EventRule"
+      EventPattern: 
+        source: 
+          - "aws.organizations"
+        detail-type: 
+          - "AWS API Call via CloudTrail"
+        detail: 
+          eventSource: 
+            - "organizations.amazonaws.com"
+          eventName:
+            - "AcceptHandshake"
+      State: "ENABLED"
+      Targets: 
+        - Arn: !GetAtt S3PublicAccessBlock.Arn
+          Id: TargetFunctionV1
+  PermissionForEventsToInvokeLambda: 
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: 
+        Ref: S3PublicAccessBlock
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt EventRule.Arn
